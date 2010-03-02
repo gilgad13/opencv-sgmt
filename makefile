@@ -1,4 +1,4 @@
-CFLAGS:=$(shell pkg-config --cflags opencv) -std=gnu99
+CFLAGS:=$(shell pkg-config --cflags opencv) -std=gnu99 -g
 LDLIBS:=$(shell pkg-config --libs opencv)
 
 sgmt: sgmt.o

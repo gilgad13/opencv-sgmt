@@ -120,7 +120,7 @@ int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int m
         uchar* pmask = (uchar*) (mask->imageData + y * mask->widthStep);
         for(int x = 0; (x < img->width) && (index < max_points); x++) {
             if(pmask[x] != 0) {
-                CvScalar pixel = cvGet2D(img, x, y);
+                CvScalar pixel = cvGet2D(img, y, x);
                 out[index] = cvCreateMat(3, 1, CV_8UC1);
                 out[index]->data.ptr[0] = pixel.val[0];
                 out[index]->data.ptr[1] = pixel.val[1];
