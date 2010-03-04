@@ -7,6 +7,7 @@ IplImage *frame;
 IplImage *marker;
 void on_mouse( int event, int x, int y, int flags, void* param );
 void EqualizeHist(IplImage* img);
+int GrabPointsFromMask(IplImage* mask, CvPoint** points,  int max_points);
 int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int max_points);
 void calcMahonobis(IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar);
 
@@ -50,13 +51,29 @@ int main( int argc, char* argv[])
     {
         // Grab new frame
         frame = cvQueryFrame(capture);
-        
+
         // Convert to HSV and split into channels
-/*        cvCvtColor(frame, frame, CV_RGB2HSV); */
-/*        EqualizeHist(frame);*/
+        cvCvtColor(frame, frame, CV_RGB2HSV); 
+        /*        EqualizeHist(frame);*/
+        FormFeatrueMat(frame, marker, features, avg, 100000);
+        cvCalcCovarMatrix((const CvArr**)features, feature_count, covar, NULL, CV_COVAR_NORMAL | CV_COVAR_SCALE);
+        cvInvert(covar, covar, CV_SVD_SYM);
         calcMahonobis(frame, mah, avg, covar);
-/*        cvShowImage("Video", frame);*/
-/*        if(cvWaitKey(33) == 27) break;*/
+        double min = 0, max = 0;
+        cvMinMaxLoc(mah, &min, &max, NULL, NULL, NULL);
+        printf("Avg is [%f | %f | %f] Max/min = [%f/%f]\n", avg->data.fl[0],avg->data.fl[1],avg->data.fl[2], max, min);
+        for( int y=0; y<mah->height; y++ ) {
+            double* ptr = (double*) ( mah->imageData + y * mah->widthStep);
+            for( int x=0; x<mah->width; x++ ) {
+                printf("|%f|", ptr[x]);
+            }
+            printf("\n");
+        }
+        
+/*        cvConvertScale(mah, mah, DBL_MAX/250.0, 0);*/
+        cvShowImage("Video", mah);
+        if(cvWaitKey(33) == 27) break;
+        break;
     }
     return 0;
 }
@@ -102,6 +119,22 @@ void EqualizeHist(IplImage* img)
    return;
 }
 
+int GrabPointsFromMask(IplImage* mask, CvPoint** points,  int max_points)
+{
+    int index = 0;
+    for(int y = 0; (y < mask->height) && (index < max_points); y++) {
+        uchar* pmask = (uchar*) (mask->imageData + y * mask->widthStep);
+        for(int x = 0; (x < mask->width) && (index < max_points); x++) {
+            if(pmask[x] != 0) {
+                points[index] = (CvPoint*)malloc(sizeof(CvPoint));
+                *(points[index++]) = cvPoint(x, y);
+            }
+        }
+    }
+
+    return index;
+}
+
 int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int max_points)
 {
     int index = 0;
@@ -139,11 +172,12 @@ int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int m
 
 void calcMahonobis(IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar)
 {
+    cvZero(output);
     IplImage* thresh = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 1);
     CvMat* pixel = cvCreateMat(1, 3, CV_32FC1);
     for(int y = 0; y < img->height; y++) {
         uchar *iptr = (uchar*)(img->imageData + y * img->widthStep);
-        uchar *optr = (uchar*)(output->imageData + y * output->widthStep);
+        double *optr = (double*)(output->imageData + y * output->widthStep);
         uchar *threshptr = (uchar*)(thresh->imageData + y * thresh->widthStep);
         for(int x = 0; x < img->width; x++) {
             cvmSet(pixel, 0, 0, iptr[3*x]);
@@ -153,10 +187,10 @@ void calcMahonobis(IplImage* img, IplImage* output, const CvMat* avg, const CvMa
             threshptr[x] = (optr[x] < 10) ? 0xFF : 0;
 /*            printf("[%f | %f | %f] and [%f | %f | %f] = [%f]\n", cvmGet(avg, 0, 0), cvmGet(avg, 0, 1), cvmGet(avg, 0, 2),*/
 /*                    cvmGet(pixel, 0, 0), cvmGet(pixel, 0, 1), cvmGet(pixel, 0, 2),*/
-/*                    cvMahalanobis(avg, pixel, covar)); */
+/*                    optr[x]);*/
         }
     }
-    cvShowImage("Video", thresh);
-    if(cvWaitKey(33) == 27);
+/*    cvShowImage("Video", thresh);*/
+/*    if(cvWaitKey(33) == 27);*/
     return;
 }
