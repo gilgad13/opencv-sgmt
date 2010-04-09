@@ -31,7 +31,12 @@ int main( int argc, char* argv[])
     cvShowImage("Video", frame);
     cvWaitKey(15);
     cvSetMouseCallback("Video", on_mouse, NULL);
-    while(cvWaitKey(33) == -1);
+    while(cvWaitKey(33) != 27) {
+        frame = cvQueryFrame(capture);
+        IplImage *disp = cvClone(frame);
+        cvSubS(frame, CV_RGB(255, 255, 255), disp, marker);
+        cvShowImage("Video", disp);
+    }
     cvSetMouseCallback("Video", NULL, NULL);
 
     CvMat* features[100000];
@@ -183,7 +188,9 @@ void calcMahonobis(IplImage* img, IplImage* output, const CvMat* avg, const CvMa
             /*                    optr[x]);*/
         }
     }
-    cvShowImage("Video", thresh);
-    if(cvWaitKey(33) == 27);
+    IplImage *disp = cvClone(img);
+    cvSubS(img, CV_RGB(255, 255, 255), disp, thresh);
+    cvShowImage("Video", disp);
+    if(cvWaitKey(15) == 27);
     return;
 }
