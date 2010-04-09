@@ -1,0 +1,2 @@
+http://www.cs.iit.edu/~agam/cs512/lect-notes/opencv-intro/opencv-intro.html
+    - look at how he steps through the image when he inverts it
