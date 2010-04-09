@@ -22,6 +22,8 @@ int main( int argc, char* argv[])
 
     cvNamedWindow("Video", CV_WINDOW_AUTOSIZE);
 
+    // App. the first frame grabbed is trash, so grab two
+    frame = cvQueryFrame(capture);
     frame = cvQueryFrame(capture);
     printf("IS_IMAGE: %d\n", CV_IS_IMAGE(frame));
     marker = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 1);
@@ -29,7 +31,6 @@ int main( int argc, char* argv[])
     // Create mask
     cvZero(marker); 
     cvShowImage("Video", frame);
-    cvWaitKey(15);
     cvSetMouseCallback("Video", on_mouse, NULL);
     while(cvWaitKey(33) == -1);
     cvSetMouseCallback("Video", NULL, NULL);
