@@ -9,7 +9,7 @@ void on_mouse( int event, int x, int y, int flags, void* param );
 void EqualizeHist(IplImage* img);
 int GrabPointsFromMask(IplImage* mask, CvPoint** points,  int max_points);
 int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int max_points);
-void calcMahonobis(IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar);
+void calcMahonobis(const IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar);
 
 int main( int argc, char* argv[])
 {
@@ -25,16 +25,16 @@ int main( int argc, char* argv[])
     // App. the first frame grabbed is trash, so grab two
     frame = cvQueryFrame(capture);
     frame = cvQueryFrame(capture);
-    printf("IS_IMAGE: %d\n", CV_IS_IMAGE(frame));
-    marker = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 1);
 
     // Create mask
+    marker = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 1);
     cvZero(marker); 
     cvShowImage("Video", frame);
     cvSetMouseCallback("Video", on_mouse, NULL);
     while(cvWaitKey(33) == -1);
     cvSetMouseCallback("Video", NULL, NULL);
 
+    // Pull out the features from that mask
     CvMat* features[100000];
     CvMat* covar = cvCreateMat(3, 3, CV_32FC1);
     CvMat* avg = cvCreateMat(1, 3, CV_32FC1); 
@@ -43,31 +43,34 @@ int main( int argc, char* argv[])
         printf("No region selected.  Quitting\n");
         exit(1);
     }
+
+    // Form the inverse covarance matrix needed for Mahalanobis distance calculation
     cvCalcCovarMatrix((const CvArr**)features, feature_count, covar, NULL, CV_COVAR_NORMAL | CV_COVAR_SCALE);
     printf("Avg is [%f | %f | %f]\n", avg->data.fl[0],avg->data.fl[1],avg->data.fl[2]);
     cvInvert(covar, covar, CV_SVD_SYM);
+
+    // Do one round of Mahalanobis
     IplImage* mah = cvCreateImage(cvGetSize(frame), IPL_DEPTH_32F, 1);
     IplImage* disp = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 3);
     calcMahonobis(frame, mah, avg, covar);
 
-    CvScalar mean, stddev; 
     while(1)
     {
         // Grab new frame
         frame = cvQueryFrame(capture);
 
         // Convert to HSV and split into channels
-        /*        cvCvtColor(frame, frame, CV_RGB2HSV); */
-        /*        EqualizeHist(frame);*/
-        /*        FormFeatrueMat(frame, marker, features, avg, 100000);*/
-        /*        cvCalcCovarMatrix((const CvArr**)features, feature_count, covar, NULL, CV_COVAR_NORMAL | CV_COVAR_SCALE);*/
-        /*        cvInvert(covar, covar, CV_SVD_SYM);*/
+/*        cvCvtColor(frame, frame, CV_RGB2HSV); */
+/*        EqualizeHist(frame);*/
+/*        FormFeatrueMat(frame, marker, features, avg, 100000);*/
+/*        cvCalcCovarMatrix((const CvArr**)features, feature_count, covar, NULL, CV_COVAR_NORMAL | CV_COVAR_SCALE);*/
+/*        cvInvert(covar, covar, CV_SVD_SYM);*/
         calcMahonobis(frame, mah, avg, covar);
 
         /*        cvConvertScale(mah, disp, 1, 0);*/
         printf("Avg is [%f | %f | %f]\n", avg->data.fl[0],avg->data.fl[1],avg->data.fl[2]); 
-        /*        cvShowImage("Video", mah);*/
-        if(cvWaitKey(33) == 27) break;
+/*        cvShowImage("Video", mah);*/
+/*        if(cvWaitKey(33) == 27) break;*/
     }
     return 0;
 }
@@ -164,7 +167,7 @@ int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int m
     return index;
 }
 
-void calcMahonobis(IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar)
+void calcMahonobis(const IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar)
 {
     cvZero(output);
     IplImage* thresh = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 1);
@@ -186,5 +189,6 @@ void calcMahonobis(IplImage* img, IplImage* output, const CvMat* avg, const CvMa
     }
     cvShowImage("Video", thresh);
     if(cvWaitKey(33) == 27);
+    cvReleaseImage(&thresh);
     return;
 }
