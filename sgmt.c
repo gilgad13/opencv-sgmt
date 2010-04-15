@@ -1,3 +1,14 @@
+/*
+ * This program will segment an image using mahalanobis distance as a metric. At
+ * the first screen, use the mouse to select pixels which will act as the
+ * "training set".  Then hit escape.
+ *
+ * execute with no commandline arguments to use webcam, or a filename to load
+ * that video.
+ *
+ * Author: Adam Brockett
+ */
+
 #include "cv.h"
 #include "highgui.h"
 #include "stdio.h"
@@ -9,7 +20,7 @@ void on_mouse( int event, int x, int y, int flags, void* param );
 void EqualizeHist(IplImage* img);
 int GrabPointsFromMask(IplImage* mask, CvPoint** points,  int max_points);
 int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int max_points);
-void calcMahonobis(const IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar);
+void calcMahalanobis(const IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar);
 
 int main( int argc, char* argv[])
 {
@@ -52,7 +63,7 @@ int main( int argc, char* argv[])
     // Do one round of Mahalanobis
     IplImage* mah = cvCreateImage(cvGetSize(frame), IPL_DEPTH_32F, 1);
     IplImage* disp = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 3);
-    calcMahonobis(frame, mah, avg, covar);
+    calcMahalanobis(frame, mah, avg, covar);
 
     while(1)
     {
@@ -65,7 +76,7 @@ int main( int argc, char* argv[])
 /*        FormFeatrueMat(frame, marker, features, avg, 100000);*/
 /*        cvCalcCovarMatrix((const CvArr**)features, feature_count, covar, NULL, CV_COVAR_NORMAL | CV_COVAR_SCALE);*/
 /*        cvInvert(covar, covar, CV_SVD_SYM);*/
-        calcMahonobis(frame, mah, avg, covar);
+        calcMahalanobis(frame, mah, avg, covar);
 
         /*        cvConvertScale(mah, disp, 1, 0);*/
         printf("Avg is [%f | %f | %f]\n", avg->data.fl[0],avg->data.fl[1],avg->data.fl[2]); 
@@ -167,7 +178,7 @@ int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int m
     return index;
 }
 
-void calcMahonobis(const IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar)
+void calcMahalanobis(const IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar)
 {
     cvZero(output);
     IplImage* thresh = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 1);
