@@ -13,14 +13,17 @@
 #include "highgui.h"
 #include "stdio.h"
 
-//! Mouse callback
+// Threshold for Mahalanobis distance, currently found empirically
+#define THRESHOLD 10
 IplImage *frame;
 IplImage *marker;
-void on_mouse( int event, int x, int y, int flags, void* param );
-void EqualizeHist(IplImage* img);
+
 int GrabPointsFromMask(IplImage* mask, CvPoint** points,  int max_points);
-int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int max_points);
+void GetFeatures(IplImage* img, CvPoint** point_list, int num_points, CvMat* covar, CvMat* avg);
 void calcMahalanobis(const IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar);
+void EqualizeHist(IplImage* img);
+// Mouse callback
+void on_mouse( int event, int x, int y, int flags, void* param );
 
 int main( int argc, char* argv[])
 {
@@ -33,7 +36,7 @@ int main( int argc, char* argv[])
 
     cvNamedWindow("Video", CV_WINDOW_AUTOSIZE);
 
-    // App. the first frame grabbed is trash, so grab two
+    // Apparently the first frame grabbed is trash, so grab two
     frame = cvQueryFrame(capture);
     frame = cvQueryFrame(capture);
 
@@ -46,42 +49,33 @@ int main( int argc, char* argv[])
     cvSetMouseCallback("Video", NULL, NULL);
 
     // Pull out the features from that mask
-    CvMat* features[100000];
-    CvMat* covar = cvCreateMat(3, 3, CV_32FC1);
-    CvMat* avg = cvCreateMat(1, 3, CV_32FC1); 
-    int feature_count = FormFeatrueMat(frame, marker, features, avg, 100000);
-    if(feature_count == 0) {
+    CvPoint* point_list[10000];
+    int point_count = GrabPointsFromMask(marker, point_list, 10000); 
+    if(point_count == 0) {
         printf("No region selected.  Quitting\n");
         exit(1);
     }
-
-    // Form the inverse covarance matrix needed for Mahalanobis distance calculation
-    cvCalcCovarMatrix((const CvArr**)features, feature_count, covar, NULL, CV_COVAR_NORMAL | CV_COVAR_SCALE);
+    CvMat* covar = cvCreateMat(3, 3, CV_32FC1);
+    CvMat* avg = cvCreateMat(1, 3, CV_32FC1); 
+    GetFeatures(frame, point_list, point_count, covar, avg);
     printf("Avg is [%f | %f | %f]\n", avg->data.fl[0],avg->data.fl[1],avg->data.fl[2]);
-    cvInvert(covar, covar, CV_SVD_SYM);
 
-    // Do one round of Mahalanobis
-    IplImage* mah = cvCreateImage(cvGetSize(frame), IPL_DEPTH_32F, 1);
-    IplImage* disp = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 3);
-    calcMahalanobis(frame, mah, avg, covar);
+    // Form the inverse covariance matrix needed for Mahalanobis distance calculation
+    cvInvert(covar, covar, CV_SVD_SYM); 
+    IplImage* mah = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 1);
 
     while(1)
     {
         // Grab new frame
         frame = cvQueryFrame(capture);
 
-        // Convert to HSV and split into channels
 /*        cvCvtColor(frame, frame, CV_RGB2HSV); */
 /*        EqualizeHist(frame);*/
-/*        FormFeatrueMat(frame, marker, features, avg, 100000);*/
-/*        cvCalcCovarMatrix((const CvArr**)features, feature_count, covar, NULL, CV_COVAR_NORMAL | CV_COVAR_SCALE);*/
-/*        cvInvert(covar, covar, CV_SVD_SYM);*/
         calcMahalanobis(frame, mah, avg, covar);
 
-        /*        cvConvertScale(mah, disp, 1, 0);*/
         printf("Avg is [%f | %f | %f]\n", avg->data.fl[0],avg->data.fl[1],avg->data.fl[2]); 
-/*        cvShowImage("Video", mah);*/
-/*        if(cvWaitKey(33) == 27) break;*/
+        cvShowImage("Video", mah);
+        if(cvWaitKey(33) == 27) break;
     }
     return 0;
 }
@@ -112,21 +106,6 @@ void on_mouse( int event, int x, int y, int flags, void* param )
 
 }
 
-void EqualizeHist(IplImage* img)
-{
-    IplImage* c1 = cvCreateImage(cvGetSize(img), img->depth, 1); 
-    IplImage* c2 = cvCreateImage(cvGetSize(img), img->depth, 1); 
-    IplImage* c3 = cvCreateImage(cvGetSize(img), img->depth, 1); 
-
-    cvSplit(img, c1, c2, c3, 0);
-    cvEqualizeHist(c1, c1);
-    cvEqualizeHist(c2, c2);
-    cvEqualizeHist(c3, c3);
-    cvMerge(c1, c2, c3, NULL, img);
-
-    return;
-}
-
 int GrabPointsFromMask(IplImage* mask, CvPoint** points,  int max_points)
 {
     int index = 0;
@@ -143,63 +122,79 @@ int GrabPointsFromMask(IplImage* mask, CvPoint** points,  int max_points)
     return index;
 }
 
-int FormFeatrueMat(IplImage* img, IplImage* mask, CvMat** out, CvMat* avg, int max_points)
+/* 
+ * Parameters:
+ *  - img           input image to pull pixels from
+ *  - point_list    array of points to pull pixels from
+ *  - num_points    number of points in above array 
+ *  - covar         (return) covariance between the 3 channels (preallocated to be 3 by 3, CV_32FC1
+ *  - avg           (return) average for each of the channels (preallocated to be 1 by 3, CV_32FC1
+ */
+void GetFeatures(IplImage* img, CvPoint** point_list, int num_points, CvMat* covar, CvMat* avg)
 {
     int index = 0;
 
     /* Alright, the general plot here is to:
-     * 1) Pull out the RGB values of img corresponding to non-zero points in
-     *      mask
-     * 2) Append these 3 chars to the bytestream pointed to by mat_data
-     * 3) Construct a Matrix headder that will allow us to interpret these
-     *      points as a p-row by 3-column matrix
+     * 1) Pull out the RGB values of img according as the list of points
+     * 2) Create a new 3x1 matrix, fill it with the RGB values of the points,
+     *      whilst simultaneously calculating the running average
+     * 3) Add a pointer to this matrix to the features array.
+     * 4) Feed this features array into the cvCalcCovarMatrix function to
+     *      calculate the covariance of the RGB channels in the pixels named in
+     *      point_list
      */
 
-    // Grab the points we need from the mask
-    for(int y = 0; (y < img->height) && (index < max_points); y++) {
-        uchar* pimg = (uchar*) (img->imageData + y * img->widthStep);
-        uchar* pmask = (uchar*) (mask->imageData + y * mask->widthStep);
-        for(int x = 0; (x < img->width) && (index < max_points); x++) {
-            if(pmask[x] != 0) {
-                CvScalar pixel = cvGet2D(img, y, x);
-                out[index] = cvCreateMat(3, 1, CV_8UC1);
-                out[index]->data.ptr[0] = pixel.val[0];
-                out[index]->data.ptr[1] = pixel.val[1];
-                out[index]->data.ptr[2] = pixel.val[2];
-                index++;
-                avg->data.fl[0] = avg->data.fl[0]*(1.0 - 1.0/index) + (1.0/index)*pixel.val[0]; 
-                avg->data.fl[1] = avg->data.fl[1]*(1.0 - 1.0/index) + (1.0/index)*pixel.val[1]; 
-                avg->data.fl[2] = avg->data.fl[2]*(1.0 - 1.0/index) + (1.0/index)*pixel.val[2]; 
-                /*                printf("Caught(%d) [%f %f %f]\n", (index / 3), pixel.val[0], pixel.val[1], pixel.val[2]);*/
-            }
-        } 
+    CvMat* features[num_points];
+    for(int i = 0; i < num_points; i++) {
+        CvScalar pixel = cvGet2D(img, point_list[i]->y, point_list[i]->y);
+        features[index] = cvCreateMat(3, 1, CV_8UC1);
+        features[index]->data.ptr[0] = pixel.val[0];
+        features[index]->data.ptr[1] = pixel.val[1];
+        features[index]->data.ptr[2] = pixel.val[2];
+        index++;
+        avg->data.fl[0] = avg->data.fl[0]*(1.0 - 1.0/index) + (1.0/index)*pixel.val[0]; 
+        avg->data.fl[1] = avg->data.fl[1]*(1.0 - 1.0/index) + (1.0/index)*pixel.val[1]; 
+        avg->data.fl[2] = avg->data.fl[2]*(1.0 - 1.0/index) + (1.0/index)*pixel.val[2]; 
     }
+    cvCalcCovarMatrix((const CvArr**)features, num_points, covar, NULL, CV_COVAR_NORMAL | CV_COVAR_SCALE); 
 
-    return index;
 }
 
+/*
+ * Parameters:
+ *  - img       input image to be segmented
+ *  - output    1 channel, IPL_DEPTH_8U image holding result of thresholding on mahalanobis
+ *  - avg       1 by 3 matrix holding average values for each channel
+ *  - covar     3 by 3 matrix holding *inverted* covariance matrix for the 3 channels
+ */
 void calcMahalanobis(const IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar)
 {
-    cvZero(output);
-    IplImage* thresh = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, 1);
     CvMat* pixel = cvCreateMat(1, 3, CV_32FC1);
     for(int y = 0; y < img->height; y++) {
         uchar *iptr = (uchar*)(img->imageData + y * img->widthStep);
-        double *optr = (double*)(output->imageData + y * output->widthStep);
-        uchar *threshptr = (uchar*)(thresh->imageData + y * thresh->widthStep);
+        uchar *optr = (uchar*)(output->imageData + y * output->widthStep);
         for(int x = 0; x < img->width; x++) {
             cvmSet(pixel, 0, 0, iptr[3*x]);
             cvmSet(pixel, 0, 1, iptr[3*x+1]);
             cvmSet(pixel, 0, 2, iptr[3*x+2]);
-            optr[x] = cvMahalanobis(avg, pixel, covar);
-            threshptr[x] = (optr[x] < 10) ? 0xFF : 0;
-            /*            printf("[%f | %f | %f] and [%f | %f | %f] = [%f]\n", cvmGet(avg, 0, 0), cvmGet(avg, 0, 1), cvmGet(avg, 0, 2),*/
-            /*                    cvmGet(pixel, 0, 0), cvmGet(pixel, 0, 1), cvmGet(pixel, 0, 2),*/
-            /*                    optr[x]);*/
+            optr[x] = (cvMahalanobis(avg, pixel, covar) < 10) ? 0xFF : 0;
         }
     }
-    cvShowImage("Video", thresh);
-    if(cvWaitKey(33) == 27);
-    cvReleaseImage(&thresh);
+    return;
+}
+
+/* Utility function */
+void EqualizeHist(IplImage* img)
+{
+    IplImage* c1 = cvCreateImage(cvGetSize(img), img->depth, 1); 
+    IplImage* c2 = cvCreateImage(cvGetSize(img), img->depth, 1); 
+    IplImage* c3 = cvCreateImage(cvGetSize(img), img->depth, 1); 
+
+    cvSplit(img, c1, c2, c3, 0);
+    cvEqualizeHist(c1, c1);
+    cvEqualizeHist(c2, c2);
+    cvEqualizeHist(c3, c3);
+    cvMerge(c1, c2, c3, NULL, img);
+
     return;
 }
