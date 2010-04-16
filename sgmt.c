@@ -41,9 +41,6 @@ int main( int argc, char* argv[])
     // Apparently the first frame grabbed is trash, so grab two
     frame = cvQueryFrame(capture);
     frame = cvQueryFrame(capture);
-    cvCvtColor(frame, frame, CV_RGB2HSV); 
-/*    EqualizeHist(frame);*/
-/*    cvCvtColor(frame, frame, CV_HSV2RGB); */
 
     // Create mask
     marker = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 1);
@@ -78,9 +75,6 @@ int main( int argc, char* argv[])
         frame = cvQueryFrame(capture);
 
         gettimeofday(&beg, NULL);
-        cvCvtColor(frame, frame, CV_RGB2HSV); 
-/*        EqualizeHist(frame);*/
-        cvCvtColor(frame, frame, CV_HSV2RGB); 
 
         calcMahalanobis(frame, mah, avg, covar);
         gettimeofday(&end, NULL);
@@ -202,21 +196,3 @@ void calcMahalanobis(const IplImage* img, IplImage* output, const CvMat* avg, co
     return;
 }
 
-/* Utility function */
-void EqualizeHist(IplImage* img)
-{
-    IplImage* c1 = cvCreateImage(cvGetSize(img), img->depth, 1); 
-    IplImage* c2 = cvCreateImage(cvGetSize(img), img->depth, 1); 
-    IplImage* c3 = cvCreateImage(cvGetSize(img), img->depth, 1); 
-
-    cvSplit(img, c1, c2, c3, 0);
-    cvEqualizeHist(c1, c1);
-    cvEqualizeHist(c2, c2);
-    cvEqualizeHist(c3, c3);
-    cvMerge(c1, c2, c3, NULL, img);
-    cvReleaseImage(&c1);
-    cvReleaseImage(&c2);
-    cvReleaseImage(&c3);
-
-    return;
-}
