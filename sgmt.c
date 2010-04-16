@@ -1,7 +1,7 @@
 /*
  * This program will segment an image using mahalanobis distance as a metric. At
  * the first screen, use the mouse to select pixels which will act as the
- * "training set".  Then hit escape.
+ * "training set".  Then hit enter (on a linux system, anyway).
  *
  * execute with no commandline arguments to use webcam, or a filename to load
  * that video.
@@ -15,7 +15,8 @@
 #include <sys/time.h>
 
 // Threshold for Mahalanobis distance, currently found empirically
-#define THRESHOLD 10
+#define THRESHOLD 1
+#define FEAT_MAX 10000
 IplImage *frame;
 IplImage *marker;
 
@@ -40,18 +41,21 @@ int main( int argc, char* argv[])
     // Apparently the first frame grabbed is trash, so grab two
     frame = cvQueryFrame(capture);
     frame = cvQueryFrame(capture);
+    cvCvtColor(frame, frame, CV_RGB2HSV); 
+/*    EqualizeHist(frame);*/
+/*    cvCvtColor(frame, frame, CV_HSV2RGB); */
 
     // Create mask
     marker = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 1);
     cvZero(marker); 
     cvShowImage("Video", frame);
     cvSetMouseCallback("Video", on_mouse, NULL);
-    while(cvWaitKey(33) == -1);
+    while(cvWaitKey(33) != 10);
     cvSetMouseCallback("Video", NULL, NULL);
 
     // Pull out the features from that mask
-    CvPoint* point_list[10000];
-    int point_count = GrabPointsFromMask(marker, point_list, 10000); 
+    CvPoint* point_list[FEAT_MAX];
+    int point_count = GrabPointsFromMask(marker, point_list, FEAT_MAX); 
     if(point_count == 0) {
         printf("No region selected.  Quitting\n");
         exit(1);
@@ -74,8 +78,10 @@ int main( int argc, char* argv[])
         frame = cvQueryFrame(capture);
 
         gettimeofday(&beg, NULL);
-/*        cvCvtColor(frame, frame, CV_RGB2HSV); */
+        cvCvtColor(frame, frame, CV_RGB2HSV); 
 /*        EqualizeHist(frame);*/
+        cvCvtColor(frame, frame, CV_HSV2RGB); 
+
         calcMahalanobis(frame, mah, avg, covar);
         gettimeofday(&end, NULL);
 
@@ -208,6 +214,9 @@ void EqualizeHist(IplImage* img)
     cvEqualizeHist(c2, c2);
     cvEqualizeHist(c3, c3);
     cvMerge(c1, c2, c3, NULL, img);
+    cvReleaseImage(&c1);
+    cvReleaseImage(&c2);
+    cvReleaseImage(&c3);
 
     return;
 }
