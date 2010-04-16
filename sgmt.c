@@ -9,9 +9,10 @@
  * Author: Adam Brockett
  */
 
-#include "cv.h"
-#include "highgui.h"
-#include "stdio.h"
+#include <cv.h>
+#include <highgui.h>
+#include <stdio.h>
+#include <sys/time.h>
 
 // Threshold for Mahalanobis distance, currently found empirically
 #define THRESHOLD 10
@@ -64,16 +65,28 @@ int main( int argc, char* argv[])
     cvInvert(covar, covar, CV_SVD_SYM); 
     IplImage* mah = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 1);
 
+    // Timing code
+    struct timeval beg, end;
+    double elapsed_time;
     while(1)
     {
         // Grab new frame
         frame = cvQueryFrame(capture);
 
+        gettimeofday(&beg, NULL);
 /*        cvCvtColor(frame, frame, CV_RGB2HSV); */
 /*        EqualizeHist(frame);*/
         calcMahalanobis(frame, mah, avg, covar);
+        gettimeofday(&end, NULL);
 
-        printf("Avg is [%f | %f | %f]\n", avg->data.fl[0],avg->data.fl[1],avg->data.fl[2]); 
+        // compute and print the elapsed time in millisec
+        elapsed_time = (end.tv_sec - beg.tv_sec) * 1000.0;      // sec to ms
+        elapsed_time += (end.tv_usec - beg.tv_usec) / 1000.0;   // us to ms
+
+        printf("Time %f ms ", elapsed_time);
+/*        printf("Avg is [%f | %f | %f]", avg->data.fl[0],avg->data.fl[1],avg->data.fl[2]); */
+        printf("\n");
+
         cvShowImage("Video", mah);
         if(cvWaitKey(33) == 27) break;
     }
