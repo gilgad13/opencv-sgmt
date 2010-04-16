@@ -3,3 +3,6 @@ LDLIBS:=$(shell pkg-config --libs opencv)
 
 sgmt: sgmt.o
 	$(CC) $(LDFLAGS) $^ $(LOADLIBES) $(LDLIBS) -o $@
+
+clean:
+	$(RM) sgmt sgmt.o
