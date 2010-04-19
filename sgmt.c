@@ -15,10 +15,8 @@
 #include <sys/time.h>
 
 // Threshold for Mahalanobis distance, currently found empirically
-#define THRESHOLD 1
+#define THRESHOLD 10
 #define FEAT_MAX 10000
-IplImage *frame;
-IplImage *marker;
 
 int GrabPointsFromMask(IplImage* mask, CvPoint** points,  int max_points);
 void GetFeatures(IplImage* img, CvPoint** point_list, int num_points, CvMat* covar, CvMat* avg);
@@ -38,21 +36,31 @@ int main( int argc, char* argv[])
 
     cvNamedWindow("Video", CV_WINDOW_AUTOSIZE);
 
+    IplImage *frame;
     // Apparently the first frame grabbed is trash, so grab two
     frame = cvQueryFrame(capture);
     frame = cvQueryFrame(capture);
 
     // Create mask
-    marker = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 1);
-    cvZero(marker); 
+    IplImage *mask;
+    mask = cvCreateImage(cvGetSize(frame), IPL_DEPTH_8U, 1);
+    cvZero(mask); 
     cvShowImage("Video", frame);
-    cvSetMouseCallback("Video", on_mouse, NULL);
-    while(cvWaitKey(33) != 10);
+    cvSetMouseCallback("Video", on_mouse, mask);
+    IplImage *disp;
+    while(cvWaitKey(33) != 10)
+    {
+        disp = cvClone(frame);
+        cvSubS(frame, CV_RGB(255, 255, 255), disp, mask);
+        cvShowImage("Video", disp);
+    }
+    cvReleaseImage(&disp);
+
     cvSetMouseCallback("Video", NULL, NULL);
 
     // Pull out the features from that mask
     CvPoint* point_list[FEAT_MAX];
-    int point_count = GrabPointsFromMask(marker, point_list, FEAT_MAX); 
+    int point_count = GrabPointsFromMask(mask, point_list, FEAT_MAX); 
     if(point_count == 0) {
         printf("No region selected.  Quitting\n");
         exit(1);
@@ -95,18 +103,20 @@ int main( int argc, char* argv[])
 
 void on_mouse( int event, int x, int y, int flags, void* param )
 {
+    IplImage* mask;
+    if(CV_IS_IMAGE(param))
+        mask = param;
+    else
+        return; 
+
     static int button_down = 0;
     static int last_x = -1;
     static int last_y = -1;
 
-
     if(button_down) {
-        cvLine(marker, cvPoint(last_x, last_y), cvPoint(x, y), cvScalar(0xFF, 0, 0, 0), 2, 8, 0); 
+        cvLine(mask, cvPoint(last_x, last_y), cvPoint(x, y), cvScalar(0xFF, 0, 0, 0), 2, 8, 0); 
         last_x = x;
         last_y = y;
-        IplImage *disp = cvClone(frame);
-        cvSubS(frame, CV_RGB(255, 255, 255), disp, marker);
-        cvShowImage("Video", disp);
     }
 
     if(event == CV_EVENT_LBUTTONDOWN) {
