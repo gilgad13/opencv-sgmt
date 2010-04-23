@@ -30,7 +30,7 @@ int main( int argc, char* argv[])
     CvCapture* capture;
 
     if(argc == 1)
-        capture = cvCreateCameraCapture(0);
+        capture = cvCreateCameraCapture(1);
     else
         capture = cvCreateFileCapture( argv[1] );
 
@@ -179,6 +179,7 @@ void GetFeatures(IplImage* img, CvPoint** point_list, int num_points, CvMat* cov
         avg->data.fl[1] = avg->data.fl[1]*(1.0 - 1.0/index) + (1.0/index)*pixel.val[1]; 
         avg->data.fl[2] = avg->data.fl[2]*(1.0 - 1.0/index) + (1.0/index)*pixel.val[2]; 
     }
+    CvMat* cvavg = cvCreateMat(1, 3, CV_32FC1); 
     cvCalcCovarMatrix((const CvArr**)features, num_points, covar, NULL, CV_COVAR_NORMAL | CV_COVAR_SCALE); 
 
 }
@@ -186,12 +187,13 @@ void GetFeatures(IplImage* img, CvPoint** point_list, int num_points, CvMat* cov
 /*
  * Parameters:
  *  - img       input image to be segmented
- *  - output    1 channel, IPL_DEPTH_8U image holding result of thresholding on mahalanobis
+ *  - output    1 channel, IPL_DEPTH_8U image holding (scaled) result of thresholding on mahalanobis
  *  - avg       1 by 3 matrix holding average values for each channel
  *  - covar     3 by 3 matrix holding *inverted* covariance matrix for the 3 channels
  */
 void calcMahalanobis(const IplImage* img, IplImage* output, const CvMat* avg, const CvMat* covar)
 {
+    double tmp;
     CvMat* pixel = cvCreateMat(1, 3, CV_32FC1);
     for(int y = 0; y < img->height; y++) {
         uchar *iptr = (uchar*)(img->imageData + y * img->widthStep);
@@ -200,7 +202,9 @@ void calcMahalanobis(const IplImage* img, IplImage* output, const CvMat* avg, co
             cvmSet(pixel, 0, 0, iptr[3*x]);
             cvmSet(pixel, 0, 1, iptr[3*x+1]);
             cvmSet(pixel, 0, 2, iptr[3*x+2]);
-            optr[x] = (cvMahalanobis(avg, pixel, covar) < 10) ? 0xFF : 0;
+            tmp = cvMahalanobis(avg, pixel, covar);
+            optr[x] = (tmp < 1.0) ? 0xFF : (char)((1.0/tmp)*0xFF);
+/*            optr[x] = (optr[x] < 0x3F) ? 0x00 : 0xFF;*/
         }
     }
     return;
