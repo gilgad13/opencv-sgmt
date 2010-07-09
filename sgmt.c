@@ -169,7 +169,7 @@ void GetFeatures(IplImage* img, CvPoint** point_list, int num_points, CvMat* cov
 
     CvMat* features[num_points];
     for(int i = 0; i < num_points; i++) {
-        CvScalar pixel = cvGet2D(img, point_list[i]->y, point_list[i]->y);
+        CvScalar pixel = cvGet2D(img, point_list[i]->x, point_list[i]->y);
         features[index] = cvCreateMat(3, 1, CV_8UC1);
         features[index]->data.ptr[0] = pixel.val[0];
         features[index]->data.ptr[1] = pixel.val[1];
